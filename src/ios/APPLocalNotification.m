@@ -98,9 +98,28 @@ UNNotificationPresentationOptions const OptionAlert = UNNotificationPresentation
  */
 - (void) schedule:(CDVInvokedUrlCommand*)command
 {
-    NSArray* notifications = command.arguments;
+    NSArray* notificationOptions = command.arguments;
 
     [self.commandDelegate runInBackground:^{
+        NSArray* notifications;
+        
+        if([notificationOptions count] > 50){
+            NSRange range;
+            range.location = 50;
+            range.length = [notificationOptions count] - 50;
+            
+            NSArray* backedUpNotifications = [notificationOptions subarrayWithRange:range];
+            NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+            [prefs setObject:backedUpNotifications forKey:@"backedUpNotifications"];
+            [prefs synchronize];
+            
+            range.location = 0;
+            range.length = 50;
+            notifications = [notificationOptions subarrayWithRange:range];
+        } else {
+            notifications = notificationOptions;
+        }
+
         for (NSDictionary* options in notifications) {
             APPNotificationContent* notification;
 
@@ -220,6 +239,10 @@ UNNotificationPresentationOptions const OptionAlert = UNNotificationPresentation
 - (void) cancelAll:(CDVInvokedUrlCommand*)command
 {
     [self.commandDelegate runInBackground:^{
+        NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+        [prefs removeObjectForKey:@"backedUpNotifications"];
+        [prefs synchronize];
+        
         [_center cancelNotifications];
         [self clearApplicationIconBadgeNumber];
         [self fireEvent:@"cancelall"];
@@ -521,7 +544,25 @@ UNNotificationPresentationOptions const OptionAlert = UNNotificationPresentation
 
     if ([toast.trigger isKindOfClass:UNPushNotificationTrigger.class])
         return;
-
+    
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+    if([[[prefs dictionaryRepresentation] allKeys] containsObject:@"backedUpNotifications"]){
+        NSArray *backedUpNotificationsArray = [prefs objectForKey:@"backedUpNotifications"];
+        if([backedUpNotificationsArray count] > 0) {
+            NSMutableArray *backedUpNotifications = [NSMutableArray arrayWithArray:backedUpNotificationsArray];
+            
+            NSDictionary* options = [backedUpNotifications objectAtIndex:0];
+            APPNotificationContent* notification = [[APPNotificationContent alloc] initWithOptions:options];
+            [self scheduleNotification:notification];
+            
+            [backedUpNotifications removeObjectAtIndex:0];
+            backedUpNotificationsArray = [backedUpNotificationsArray copy];
+            
+            [prefs setObject:backedUpNotificationsArray forKey:@"backedUpNotifications"];
+            [prefs synchronize];
+        }
+    }
+    
     NSMutableDictionary* data = [[NSMutableDictionary alloc] init];
     NSString* action          = response.actionIdentifier;
     NSString* event           = action;
