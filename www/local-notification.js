@@ -619,7 +619,7 @@ exports._convertProperties = function (options) {
     }
 
     if (typeof options.timeoutAfter === 'boolean') {
-        options.timeoutAfter = options.timeoutAfter ? 3600000 : null;
+        options.timeoutAfter = options.timeoutAfter ? 3600000 : 0;
     }
 
     if (options.timeoutAfter) {
